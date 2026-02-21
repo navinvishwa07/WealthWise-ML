@@ -1,0 +1,11 @@
+import pandas as pd
+import re
+
+data = {
+    "Description": ["UPI/DDSTORE/1", "SWIGGY"],
+    "Amount": [40, 350]
+}
+
+df = pd.DataFrame(data)
+print(df)
+
