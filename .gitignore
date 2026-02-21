@@ -1,0 +1,10 @@
+tempCodeRunnerFile*
+.vscode/
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+
+# Data files (To keep your personal 5k income/SIP data private)
+*.csv
+*.xlsx
