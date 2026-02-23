@@ -4,7 +4,7 @@ import os
 RULES_FILE = "user_rules.json"
 
 def load_rules():
-    if os.path.exists(RULES_FILE):
+    if not os.path.exists(RULES_FILE):
         return {}
     
     with open(RULES_FILE, "r") as file:
