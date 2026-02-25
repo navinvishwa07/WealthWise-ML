@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 from processor import generate_mock_data, process_data
+from classifier import apply_classification
+
 
 # Initialize session state for data persistence
 if "df" not in st.session_state:
@@ -29,5 +31,28 @@ elif st.session_state.df is None:
 else:
     df = st.session_state.df
     
-st.write("Transactions: ", df)
+tab1, tab2, tab3 = st.tabs(["Dashboard", "Labeling", "Raw Data"])
 
+with tab1:
+    st.subheader("Overview")
+    st.write("Summary insights will go here.")
+
+with tab2:
+    st.subheader("Uncategorized Merchants")
+    uncategorized_df = df[df["Category"] == "UNCATEGORIZED"]
+    unique_merchants = uncategorized_df["Merchant"].unique()
+    
+    for merchant in unique_merchants:
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.write(merchant)
+        with col2:
+            category = st.selectbox(
+                "Assign Category",
+                ["Food", "Transport", "Bills", "Shopping", "Other"],
+                key=merchant
+            )
+
+with tab3:
+    st.subheader("Raw Transactions")
+    st.dataframe(df)
