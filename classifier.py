@@ -23,7 +23,6 @@ def load_rules():
         except json.JSONDecodeError:
             return {}  # Return empty dictionary if file is corrupted
 
-
 def save_rules(merchant, category):
     """
     Saves or updates a merchant-category pair in the JSON file.
@@ -45,7 +44,7 @@ def cluster_merchant(df, threshold=90):
     Returns a list of clusters.
     """
     # Get unique merchant names from dataframe
-    unique_merchants = df["merchant"].unique()
+    unique_merchants = df["Merchant"].unique()
 
     clusters = []      # Stores final grouped clusters
     visited = set()    # Tracks merchants already grouped

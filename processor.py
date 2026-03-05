@@ -49,6 +49,12 @@ def process_data(df):
         case=False, 
         na=False
     )
+    
+    df['is_investment'] = df['Description'].str.contains(
+        r'SIP|NIFTY|INDEX|UTI|NIPPON', 
+        case=False, 
+        na=False
+    )
     return df
 
 if __name__ == "__main__":

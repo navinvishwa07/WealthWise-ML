@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import plotly.express as px
 from processor import generate_mock_data, process_data
 from classifier import apply_classification, save_rules
 
@@ -8,9 +9,9 @@ from classifier import apply_classification, save_rules
 if "df" not in st.session_state:
     st.session_state.df = None
 
-st.title("WealthWise - Finance Tracking app using ML")
+st.title("WealthWise - Finance Tracking app")
 
-st.sidebar.title("Monthly Income in Rs")
+st.sidebar.title("Monthly Income in Rs") 
 monthly_income = st.sidebar.number_input("Insert your monthly income")
 st.write("The current number is ", monthly_income)
 
@@ -42,7 +43,6 @@ elif st.session_state.df is None:
 else:
     df = st.session_state.df
 
-
 # Apply rule-based classification before rendering UI
 df = apply_classification(df)
 
@@ -53,9 +53,10 @@ tab1, tab2, tab3 = st.tabs(["Dashboard", "Labeling", "Raw Data"])
 with tab1:
     st.subheader("Overview")
 
-    # Exclude transfers from spending calculations
-    spending_df = df[~df["is_transfer"]]
+    # Exclude transfers and investments from spending calculations
+    spending_df = df[~df["is_transfer"] & ~df["is_investment"]]
     total_spent = spending_df["Amount"].sum()
+    
 
     # Food analysis (all categories containing "Food")
     food_df = df[df["Category"].str.contains("Food", na=False)]
@@ -119,7 +120,6 @@ with tab1:
     if total_spent > 0:
         food_ratio = (total_food / total_spent) * 100
         st.write(f"{food_ratio:.1f}% of your total spending is on food.")
-
     
 with tab2:
     st.subheader("Uncategorized Merchants")
@@ -165,8 +165,6 @@ with tab2:
                     save_rules(merchant, category)
                     st.success(f"Saved {merchant} as {category}")
                     st.rerun()
-
-                    
 
 with tab3:
     st.subheader("Raw Transactions")
