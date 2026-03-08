@@ -46,7 +46,6 @@ else:
 # Apply rule-based classification before rendering UI
 df = apply_classification(df)
 
-
 # Tabs help separate logic-heavy sections from display sections
 tab1, tab2, tab3 = st.tabs(["Dashboard", "Labeling", "Raw Data"])
 
@@ -54,10 +53,9 @@ with tab1:
     st.subheader("Overview")
 
     # Exclude transfers and investments from spending calculations
-    spending_df = df[~df["is_transfer"] & ~df["is_investment"]]
-    total_spent = spending_df["Amount"].sum()
+    spending_df = df[~df["is_transfer"] & ~df["is_investment"] & ~df["is_reimbursement"]]
+    total_spent = spending_df["Amount"].sum()    
     
-
     # Food analysis (all categories containing "Food")
     food_df = df[df["Category"].str.contains("Food", na=False)]
     total_food = food_df["Amount"].sum()
@@ -73,9 +71,10 @@ with tab1:
     # SIP treated as planned investment
     invested = SIP
     remaining_budget = monthly_income - total_spent - invested
+    netted_amount = df[df["is_reimbursement"]]["Amount"].abs().sum() / 2
 
     # ---------------- Core Metrics ----------------
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
 
     with col1:
         st.metric("Total Spent", f"₹ {total_spent:,.2f}")
@@ -85,6 +84,8 @@ with tab1:
 
     with col3:
         st.metric("Remaining Budget", f"₹ {remaining_budget:,.2f}")
+    with col4:
+        st.metric("Reimbursements Netted", f"₹ {netted_amount:,.2f}")
 
     # SIP progress
     if SIP > 0:
