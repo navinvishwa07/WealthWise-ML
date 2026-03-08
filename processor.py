@@ -84,7 +84,13 @@ def generate_mock_data(rows=15):
         "Amount": [random.randint(10, 2000) for _ in range(rows)]
     }
     
-    return pd.DataFrame(data)
+    
+    reimbursement_pair = pd.DataFrame({
+    "Date": [pd.Timestamp("2026-02-05"), pd.Timestamp("2026-02-07")],
+    "Description": ["RAHUL-SHARMA-UPI", "RAHUL-SHARMA-UPI"],
+    "Amount": [514, -514]
+    })
+    return pd.concat([pd.DataFrame(data), reimbursement_pair], ignore_index=True)
 
 def clean_description(description):
     if pd.isna(description):
@@ -102,23 +108,42 @@ def clean_description(description):
 def process_data(df):
     column_mapping = sniff_headers(df)
     df = df.rename(columns={v: k for k, v in column_mapping.items()})
-    """Pipeline to clean and flag the dataframe"""
-    # Create the Merchant column
     df['Merchant'] = df['Description'].apply(clean_description)
-    
-    # Flag transfers (Important for your 2k SIP / 5k Income logic)
-    df['is_transfer'] = df['Description'].str.contains(
-        r'TRANSFER|SELF|SAVINGS', 
-        case=False, 
-        na=False
-    )
-    
-    df['is_investment'] = df['Description'].str.contains(
-        r'SIP|NIFTY|INDEX|UTI|NIPPON', 
-        case=False, 
-        na=False
-    )
+    df['is_transfer'] = df['Description'].str.contains(r'TRANSFER|SELF|SAVINGS', case=False, na=False)
+    df['is_investment'] = df['Description'].str.contains(r'SIP|NIFTY|INDEX|UTI|NIPPON', case=False, na=False)
+    df = find_reimbursements(df)
     return df
+
+def find_reimbursements(df):
+    df["is_reimbursement"] = False
+    matched = set()
+
+    for i in range(len(df)):
+        if i in matched:
+            continue
+
+        for j in range(len(df)):
+            if j in matched or i == j:
+                continue
+
+            # Condition 1: time window
+            days_apart = abs((df.loc[j, "Date"] - df.loc[i, "Date"]).days)
+
+            # Condition 2: amount tolerance
+            amount_match = abs(abs(df.loc[i, "Amount"]) - abs(df.loc[j, "Amount"])) <= 1
+
+            # Condition 3: one debit (+ve), one credit (-ve)
+            opposite_signs = (df.loc[i, "Amount"] > 0 and df.loc[j, "Amount"] < 0) or (df.loc[i, "Amount"] < 0 and df.loc[j, "Amount"] > 0)
+            
+            if days_apart <= 3 and amount_match and opposite_signs:
+                df.loc[i, "is_reimbursement"] = True
+                df.loc[j, "is_reimbursement"] = True
+                matched.add(i)
+                matched.add(j)
+                break
+
+    return df
+
 
 if __name__ == "__main__":
     raw_df = generate_mock_data()
