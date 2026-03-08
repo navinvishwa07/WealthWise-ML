@@ -1,6 +1,67 @@
 import pandas as pd
 import random
 import re
+from rapidfuzz import fuzz
+
+HEADER_SYNONYMS = {
+    "Description": [
+        "Description",
+        "Narration",
+        "Transaction Remarks",
+        "Remarks",
+        "Details",
+        "Particulars"
+    ],
+    
+    "Date": [
+        "Date",
+        "Txn Date",
+        "Transaction Date",
+        "Value Date",
+        "Posting Date"
+    ],
+    
+    "Amount": [
+        "Amount",
+        "Withdrawal Amt",
+        "Debit",
+        "Dr Amount",
+        "Transaction Amount",
+        "Withdrawal Amt (INR)"
+    ]
+}
+
+def sniff_headers(df):
+    """
+    Attempts to map the columns of the dataframe to the expected headers 
+    (Description, Date, Amount) using a combination of exact matches and fuzzy matching.
+    """
+    
+    column_mapping = {}
+
+    for expected_header, synonyms in HEADER_SYNONYMS.items():
+        for synonym in synonyms:
+            for col in df.columns:
+                if synonym.lower() == col.lower():
+                    column_mapping[expected_header] = col
+                    break
+            if expected_header in column_mapping:
+                break
+    
+    # If any expected header is missing, try fuzzy matching
+    for expected_header in HEADER_SYNONYMS.keys():
+        if expected_header not in column_mapping:
+            best_match = None
+            best_score = 0
+            for col in df.columns:
+                score = fuzz.ratio(expected_header.lower(), col.lower())
+                if score > best_score:
+                    best_score = score
+                    best_match = col
+            if best_score > 80:  # Threshold for accepting a match
+                column_mapping[expected_header] = best_match
+    
+    return column_mapping
 
 def generate_mock_data(rows=15):
     """
@@ -39,6 +100,8 @@ def clean_description(description):
     return fallback.group(1).upper() if fallback else description.upper()
 
 def process_data(df):
+    column_mapping = sniff_headers(df)
+    df = df.rename(columns={v: k for k, v in column_mapping.items()})
     """Pipeline to clean and flag the dataframe"""
     # Create the Merchant column
     df['Merchant'] = df['Description'].apply(clean_description)
@@ -58,9 +121,7 @@ def process_data(df):
     return df
 
 if __name__ == "__main__":
-    # Now we call them in order
     raw_df = generate_mock_data()
     clean_df = process_data(raw_df)
-    
     print("--- WealthWise Processed Data ---")
     print(clean_df[['Description', 'Merchant', 'is_transfer']].head(10))
