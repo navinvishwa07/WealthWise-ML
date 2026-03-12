@@ -1,6 +1,7 @@
 import pandas as pd
 import random
 import re
+import numpy as np
 from rapidfuzz import fuzz
 
 HEADER_SYNONYMS = {
@@ -108,6 +109,9 @@ def clean_description(description):
 def process_data(df):
     column_mapping = sniff_headers(df)
     df = df.rename(columns={v: k for k, v in column_mapping.items()})
+    df = df.dropna(subset=["Description", "Date", "Amount"])
+    df["Amount"] = df["Amount"].apply(clean_amount)
+    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
     df['Merchant'] = df['Description'].apply(clean_description)
     df['is_transfer'] = df['Description'].str.contains(r'TRANSFER|SELF|SAVINGS', case=False, na=False)
     df['is_investment'] = df['Description'].str.contains(r'SIP|NIFTY|INDEX|UTI|NIPPON', case=False, na=False)
@@ -144,6 +148,13 @@ def find_reimbursements(df):
 
     return df
 
+def clean_amount(value):
+    cleaned = re.sub(r'[₹,\s]', '', str(value))
+    try:
+        return float(cleaned)
+    except ValueError:
+        return 0.0
+    
 
 if __name__ == "__main__":
     raw_df = generate_mock_data()

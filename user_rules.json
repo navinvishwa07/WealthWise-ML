@@ -5,5 +5,8 @@
     "SELF": "Other",
     "TRANSFER": "Friends Payments",
     "ZOMATO": "Food - Delivery (Swiggy/Zomato)",
-    "RAHUL": "Groceries / Snacks"
+    "RAHUL": "Groceries / Snacks",
+    "SWIGGY": "Food - Delivery (Swiggy/Zomato)",
+    "AMAZON": "Shopping",
+    "UTI": "Investments (SIP)"
 }

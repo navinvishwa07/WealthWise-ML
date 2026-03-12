@@ -31,7 +31,7 @@ Otherwise reuse session state
 """
 
 if monthly_spending_csv is not None:
-    df = pd.read_csv(monthly_spending_csv)
+    df = pd.read_csv(monthly_spending_csv, on_bad_lines='skip')
     df = process_data(df)
     st.session_state.df = df
 
