@@ -8,3 +8,5 @@ __pycache__/
 # Data files (To keep your personal 5k income/SIP data private)
 *.csv
 *.xlsx
+.env
+
