@@ -1,8 +1,11 @@
 import streamlit as st
 import pandas as pd
+import plotly.express as px
+
 from processor import generate_mock_data, process_data
 from classifier import apply_classification, save_rules
 from ai_advisor import get_context, ask_groq
+from logic_engine import weekly_safe_spend, sinking_fund_calc
 
 if "df" not in st.session_state:
     st.session_state.df = None
@@ -60,7 +63,7 @@ with tab1:
     remaining_budget = monthly_income - total_spent - invested
     netted_amount = df[df["is_reimbursement"]]["Amount"].abs().sum() / 2
 
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
 
     with col1:
         st.metric("Total Spent", f"₹ {total_spent:,.2f}")
@@ -70,6 +73,9 @@ with tab1:
         st.metric("Remaining Budget", f"₹ {remaining_budget:,.2f}")
     with col4:
         st.metric("Reimbursements Netted", f"₹ {netted_amount:,.2f}")
+    with col5:
+        weekly_spend = weekly_safe_spend(monthly_income, total_spent, SIP)
+        st.metric("Weekly Safe Spend", f"₹ {weekly_spend:,.2f}")
 
     if SIP > 0:
         sip_progress = min(invested / SIP, 1.0)
@@ -79,8 +85,13 @@ with tab1:
         spending_ratio = (total_spent / monthly_income) * 100
         st.write(f"You have spent {spending_ratio:.1f}% of your monthly income.")
 
-    st.subheader("Top Spending Categories")
-    st.dataframe(category_summary.head(5))
+    fig = px.pie(
+    values=category_summary.values,
+    names=category_summary.index,
+    hole=0.4,
+    title="Spending by Category"
+    )
+    st.plotly_chart(fig)
 
     st.subheader("Category Spending Breakdown")
 
@@ -97,6 +108,10 @@ with tab1:
     if total_spent > 0:
         food_ratio = (total_food / total_spent) * 100
         st.write(f"{food_ratio:.1f}% of your total spending is on food.")
+        
+    canteen_count = df[df["Merchant"].isin(["DD", "DDSTORE"])].shape[0]
+    if canteen_count > 5:
+        st.warning(f"⚠️ High canteen frequency — {canteen_count} visits this month!")
 
 with tab2:
     st.subheader("Uncategorized Merchants")
