@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from processor import generate_mock_data, process_data
 from classifier import apply_classification, save_rules
+from ai_advisor import get_context, ask_groq
 
 if "df" not in st.session_state:
     st.session_state.df = None
@@ -37,7 +38,7 @@ if st.session_state.df is None:
 df = st.session_state.df
 df = apply_classification(df)
 
-tab1, tab2, tab3 = st.tabs(["Dashboard", "Labeling", "Raw Data"])
+tab1, tab2, tab3, tab4 = st.tabs(["Dashboard", "Labeling", "Raw Data", "AI Advisor"])
 
 with tab1:
     st.subheader("Overview")
@@ -144,3 +145,17 @@ with tab2:
 with tab3:
     st.subheader("Raw Transactions")
     st.dataframe(df)
+    
+with tab4:
+    st.subheader("AI Financial Advisor")
+    
+    user_question = st.text_input("Ask me anything about your finances...")
+    
+    if st.button("Ask"):
+        if user_question:
+            with st.spinner("Thinking..."):
+                context = get_context(df, monthly_income, SIP)
+                response = ask_groq(user_question, context)
+            st.write(response)
+        else:
+            st.warning("Please enter a question.")
