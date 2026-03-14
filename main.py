@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import plotly.express as px
 
 from processor import generate_mock_data, process_data
@@ -48,7 +49,10 @@ with tab1:
 
     spending_df = df[~df["is_transfer"] & ~df["is_investment"] & ~df["is_reimbursement"]]
     total_spent = spending_df["Amount"].sum()
-
+    daily_spend = spending_df.groupby("Date")["Amount"].sum().cumsum().reset_index()
+    daily_spend["Projected"] = np.linspace(0, monthly_income - SIP, len(daily_spend))
+    daily_spend.columns = ["Date", "Cumulative Spend", "Projected"]
+    
     food_df = df[df["Category"].str.contains("Food", na=False)]
     total_food = food_df["Amount"].sum()
 
@@ -58,7 +62,7 @@ with tab1:
         .sum()
         .sort_values(ascending=False)
     )
-
+    
     invested = SIP
     remaining_budget = monthly_income - total_spent - invested
     netted_amount = df[df["is_reimbursement"]]["Amount"].abs().sum() / 2
@@ -85,13 +89,16 @@ with tab1:
         spending_ratio = (total_spent / monthly_income) * 100
         st.write(f"You have spent {spending_ratio:.1f}% of your monthly income.")
 
-    fig = px.pie(
+    pie_graph = px.pie(
     values=category_summary.values,
     names=category_summary.index,
     hole=0.4,
     title="Spending by Category"
     )
-    st.plotly_chart(fig)
+    st.plotly_chart(pie_graph)
+    
+    line_graph = px.line(daily_spend, x = "Date", y = ["Cumulative Spend","Projected"], title="Cumulative Spending This month")
+    st.plotly_chart(line_graph)
 
     st.subheader("Category Spending Breakdown")
 
