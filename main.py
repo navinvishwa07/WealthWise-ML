@@ -1,10 +1,11 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import threading
 import plotly.express as px
 
 from processor import generate_mock_data, process_data
-from classifier import apply_classification, save_rules
+from classifier import apply_classification, save_rules, cluster_merchants
 from ai_advisor import get_context, ask_groq
 from logic_engine import weekly_safe_spend, sinking_fund_calc
 
@@ -42,6 +43,22 @@ if st.session_state.df is None:
 df = st.session_state.df
 df = apply_classification(df)
 
+if "clusters" not in st.session_state:
+    result = {}
+    
+    def run_clustering():
+        """Runs cluster_merchants in a background thread and stores result."""
+        result["clusters"] = cluster_merchants(df)
+    
+    with st.spinner("Clustering merchants..."):
+        """Start thread and wait for it to finish before proceeding."""
+        thread = threading.Thread(target=run_clustering)
+        thread.start()
+        thread.join()
+    
+    st.session_state.clusters = result["clusters"]
+    
+    
 tab1, tab2, tab3, tab4 = st.tabs(["Dashboard", "Labeling", "Raw Data", "AI Advisor"])
 
 with tab1:
@@ -124,16 +141,23 @@ with tab2:
     st.subheader("Uncategorized Merchants")
 
     uncategorized_df = df[df["Category"] == "UNCATEGORIZED"]
-    unique_merchants = uncategorized_df["Merchant"].unique()
+    unique_merchants = set(uncategorized_df["Merchant"].unique())
+    clusters = st.session_state.clusters
 
     if len(unique_merchants) == 0:
         st.success("All merchants are categorized.")
     else:
-        for merchant in unique_merchants:
+        for cluster in clusters:
+            # Only show clusters that have at least one uncategorized merchant
+            cluster_uncategorized = [m for m in cluster if m in unique_merchants]
+            if not cluster_uncategorized:
+                continue
+
             col1, col2, col3 = st.columns([3, 2, 1])
 
             with col1:
-                st.write(merchant)
+                # Show all merchants in the cluster
+                st.write(", ".join(cluster))
 
             with col2:
                 category = st.selectbox(
@@ -155,15 +179,18 @@ with tab2:
                         "Investments (SIP)",
                         "Other"
                     ],
-                    key=f"select_{merchant}"
+                    key=f"select_{cluster[0]}"
                 )
 
             with col3:
-                if st.button("Save", key=f"save_{merchant}"):
-                    save_rules(merchant, category)
-                    st.success(f"Saved {merchant} as {category}")
+                if st.button("Save", key=f"save_{cluster[0]}"):
+                    # Save all merchants in the cluster with the same category
+                    for m in cluster:
+                        save_rules(m, category)
+                    st.success(f"Saved {len(cluster)} merchants as {category}")
+                    st.session_state.clusters = None
                     st.rerun()
-
+                    
 with tab3:
     st.subheader("Raw Transactions")
     st.dataframe(df)
