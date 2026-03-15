@@ -91,9 +91,9 @@ def clean_description(description):
     if pd.isna(description):
         return "UNKNOWN"
 
-    match = re.search(r'UPI/([^/0-9-]+)', description, re.IGNORECASE)
+    match = re.search(r'UPI/([^/0-9]+)', description, re.IGNORECASE)
     if match:
-        return match.group(1).strip().upper()
+        return match.group(1).replace('-', '').strip().upper()
 
     fallback = re.search(r'([A-Za-z]+)', description)
     return fallback.group(1).upper() if fallback else description.upper()
@@ -154,4 +154,4 @@ if __name__ == "__main__":
     raw_df = generate_mock_data()
     clean_df = process_data(raw_df)
     print("--- WealthWise Processed Data ---")
-    print(clean_df[["Description", "Amount", "is_reimbursement"]])
+    print(clean_df[['Description', 'Merchant', 'is_reimbursement']])
