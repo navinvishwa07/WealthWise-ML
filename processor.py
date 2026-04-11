@@ -117,22 +117,30 @@ def process_data(df):
         r'TRANSFER|SELF|SAVINGS', case=False, na=False
     )
     df["is_investment"] = df["Description"].str.contains(
-        r'SIP|NIFTY|INDEX|UTI|NIPPON', case=False, na=False
+        r'SIP|NIFTY|INDEX|UTI|NIPPON|ICCL|MUTUAL|MF', case=False, na=False
     )
+    ends_with_pay  = df["Description"].str.contains(r'-(UPI|PAY|GPAY|IMPS)$', regex=True, case=False)
+    has_no_numbers = ~df["Description"].str.contains(r'\d+', regex=True)
+    no_commerce = ~df["Description"].str.contains(r'(ORDER|STORE|SHOP|SUBSCRIPTION|RIDE|LUNCH|DELIVERY|PAYMENT|SERVICE|MART)', regex=True, case=False)
+    df["is_person"] = ends_with_pay & has_no_numbers & no_commerce
+    df.loc[df["is_person"], "Category"] = "Friends Payments"
+    df.loc[df["is_transfer"], "Category"] = "Internal Transfer"
     df = find_reimbursements(df)
     return df
 
 def find_reimbursements(df):
     df["is_reimbursement"] = False
     matched = set()
+    
 
-    for i in range(len(df)):
-        if i in matched:
-            continue
+    candidates = df[~df["is_investment"] & ~df["is_transfer"]].index.tolist()
+    for i in candidates:
 
-        for j in range(len(df)):
-            if j in matched or i == j:
-                continue
+        if i in matched: continue
+
+        for j in candidates:
+
+            if j in matched or i == j: continue
 
             days_apart = abs((df.loc[j, "Date"] - df.loc[i, "Date"]).days)
             amount_match = abs(abs(df.loc[i, "Amount"]) - abs(df.loc[j, "Amount"])) <= 1
@@ -140,8 +148,14 @@ def find_reimbursements(df):
                 (df.loc[i, "Amount"] > 0 and df.loc[j, "Amount"] < 0) or
                 (df.loc[i, "Amount"] < 0 and df.loc[j, "Amount"] > 0)
             )
+            merchant_sim = fuzz.token_sort_ratio(
 
-            if days_apart <= 3 and amount_match and opposite_signs:
+                str(df.loc[i, "Description"]), str(df.loc[j, "Description"])
+
+            )
+            
+            either_is_person = df.loc[i, "is_person"] or df.loc[j, "is_person"]
+            if days_apart <= 7 and amount_match and opposite_signs and merchant_sim >= 75 and either_is_person:
                 df.loc[i, "is_reimbursement"] = True
                 df.loc[j, "is_reimbursement"] = True
                 matched.add(i)

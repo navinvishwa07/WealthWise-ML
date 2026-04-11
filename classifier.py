@@ -83,9 +83,9 @@ def apply_classification(df):
     merchants, categories = build_training_data()
     model, vectorizer = train_model(merchants, categories)
     rules = load_rules()
-    rules = load_rules()
-    df["Category"] = df["Merchant"].apply(
-        lambda x: get_category(x, rules, model=model, vectorizer=vectorizer)
+    mask = df["Category"].isna() | (df["Category"] == "UNCATEGORIZED")
+    df.loc[mask, "Category"] = df.loc[mask, "Merchant"].apply(
+    lambda x: get_category(x, rules, model=model, vectorizer=vectorizer)
     )
     return df
 
