@@ -1,4 +1,5 @@
 import datetime
+import config
 
 def weekly_safe_spend(monthly_income, total_spent, SIP):
     remaining_budget = monthly_income - total_spent - SIP

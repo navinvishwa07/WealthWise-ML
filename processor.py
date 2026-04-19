@@ -2,6 +2,7 @@ import pandas as pd
 import random
 import re
 from rapidfuzz import fuzz
+import config
 
 HEADER_SYNONYMS = {
     "Description": [
@@ -87,16 +88,43 @@ def generate_mock_data(rows=15):
 
     return pd.concat([pd.DataFrame(data), reimbursement_pair], ignore_index=True)
 
+
 def clean_description(description):
     if pd.isna(description):
         return "UNKNOWN"
 
-    match = re.search(r'UPI/([^/0-9]+)', description, re.IGNORECASE)
-    if match:
-        return match.group(1).replace('-', '').strip().upper()
+    description = str(description)
 
-    fallback = re.search(r'([A-Za-z]+)', description)
-    return fallback.group(1).upper() if fallback else description.upper()
+    # Step 1: Handle structured UPI format (e.g., UPI/DDSTORE/20260220/1)
+    match = re.search(r'UPI/([^/]+)/?', description, re.IGNORECASE)
+    if match:
+        cleaned = match.group(1)
+
+    else:
+        # Step 2: Remove known suffix noise
+        cleaned = re.sub(
+            r'[-\s]*(UPI|PAY|GPAY|IMPS|PAYTM)\b.*$',
+            '',
+            description,
+            flags=re.IGNORECASE
+        )
+
+        # Step 3: Keep only letters, spaces, and hyphens
+        cleaned = re.sub(r'[^A-Za-z\-\s]', '', cleaned)
+
+    # Step 4: Replace hyphens with spaces
+    cleaned = cleaned.replace('-', ' ')
+
+    # Step 5: Normalize spacing
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+
+    # Step 6: Fallback if empty
+    if not cleaned:
+        fallback = re.search(r'[A-Za-z]+(?:\s+[A-Za-z]+)?', description)
+        cleaned = fallback.group(0) if fallback else "UNKNOWN"
+
+    return cleaned.upper()
+
 
 def clean_amount(value):
     cleaned = re.sub(r'[₹,\s]', '', str(value))
@@ -119,9 +147,14 @@ def process_data(df):
     df["is_investment"] = df["Description"].str.contains(
         r'SIP|NIFTY|INDEX|UTI|NIPPON|ICCL|MUTUAL|MF', case=False, na=False
     )
-    ends_with_pay  = df["Description"].str.contains(r'-(UPI|PAY|GPAY|IMPS)$', regex=True, case=False)
+    ends_with_pay = df["Description"].str.contains(r'-(?:UPI|PAY|GPAY|IMPS)$', regex=True, case=False)
     has_no_numbers = ~df["Description"].str.contains(r'\d+', regex=True)
-    no_commerce = ~df["Description"].str.contains(r'(ORDER|STORE|SHOP|SUBSCRIPTION|RIDE|LUNCH|DELIVERY|PAYMENT|SERVICE|MART)', regex=True, case=False)
+    no_commerce = ~df["Description"].str.contains(  
+    r'(?:ORDER|STORE|SHOP|SUBSCRIPTION|RIDE|LUNCH|DELIVERY|PAYMENT|SERVICE|MART)',
+    regex=True,
+    case=False
+    )
+    
     df["is_person"] = ends_with_pay & has_no_numbers & no_commerce
     df.loc[df["is_person"], "Category"] = "Friends Payments"
     df.loc[df["is_transfer"], "Category"] = "Internal Transfer"
@@ -155,7 +188,7 @@ def find_reimbursements(df):
             )
             
             either_is_person = df.loc[i, "is_person"] or df.loc[j, "is_person"]
-            if days_apart <= 7 and amount_match and opposite_signs and merchant_sim >= 75 and either_is_person:
+            if days_apart <= config.REIMBURSEMENT_WINDOW_DAYS and amount_match and opposite_signs and merchant_sim >= config.FUZZY_THRESHOLD and either_is_person:
                 df.loc[i, "is_reimbursement"] = True
                 df.loc[j, "is_reimbursement"] = True
                 matched.add(i)

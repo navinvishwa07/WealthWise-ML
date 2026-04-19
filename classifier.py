@@ -1,21 +1,33 @@
 import json
 import os
 import threading
+import config
 from rapidfuzz import fuzz
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.ensemble import RandomForestClassifier
 
-RULES_FILE = "user_rules.json"
+RULES_FILE = config.RULES_FILE
+DEFAULT_RULES = config.DEFAULT_RULES
 
 def load_rules():
-    """Loads merchant-category mappings from JSON. Returns empty dict if missing."""
-    if not os.path.exists(RULES_FILE):
-        return {}
-    with open(RULES_FILE, "r") as file:
+    """Loads merchant-category mappings with fallback to seed rules."""
+
+    def load_json(path):
+        if not os.path.exists(path):
+            return {}
         try:
-            return json.load(file)
+            with open(path, "r") as file:
+                return json.load(file)
         except json.JSONDecodeError:
             return {}
+        
+    seed_rules = load_json(DEFAULT_RULES)
+    user_rules = load_json(RULES_FILE)
+
+    # Merge: user rules override seed rules
+    merged_rules = {**seed_rules, **user_rules}
+
+    return merged_rules
 
 def save_rules(merchant, category):
     """Saves or updates a merchant-category pair in JSON."""
@@ -24,7 +36,7 @@ def save_rules(merchant, category):
     with open(RULES_FILE, "w") as file:
         json.dump(rules, file, indent=4)
 
-def cluster_merchants(df, threshold=90):
+def cluster_merchants(df, threshold=config.FUZZY_THRESHOLD):
     """Groups similar merchant names using fuzzy matching."""
     unique_merchants = df["Merchant"].unique()
     clusters = []
@@ -49,7 +61,7 @@ def cluster_merchants(df, threshold=90):
 
     return clusters
 
-def get_category(merchant, rules, threshold=90, model=None, vectorizer=None):
+def get_category(merchant, rules, threshold=config.FUZZY_THRESHOLD, model=None, vectorizer=None):
     """
     Determines category using:
     1. Exact match
@@ -100,7 +112,7 @@ def build_training_data():
 def train_model(merchants, categories):
     """Trains a Random Forest classifier on the merchant-category data."""
     
-    if len(merchants) < 10:
+    if len(merchants) < config.ML_MIN_TRAINING_SAMPLES:
         return None, None
 
     vectorizer = TfidfVectorizer()
@@ -111,11 +123,19 @@ def train_model(merchants, categories):
     return model, vectorizer
     
 def predict_category(merchant, model, vectorizer):
-    """Predicts category for a merchant using the trained model."""
+    """Predicts category for a merchant using the trained model with confidence filtering."""
+    
     if model is None or vectorizer is None:
         return "UNCATEGORIZED"
     
     X = vectorizer.transform([merchant])
     predicted_category = model.predict(X)[0]
-    return predicted_category
     
+    proba = model.predict_proba(X)
+    max_confidence = proba.max(axis=1)[0]
+    
+    # Step 4: Apply threshold
+    if max_confidence < config.ML_CONFIDENCE_THRESHOLD:
+        return "UNCATEGORIZED"
+    
+    return predicted_category

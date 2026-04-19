@@ -80,7 +80,7 @@ with tab1:
         .sort_values(ascending=False)
     )
     
-    invested = SIP
+    invested = df[df["is_investment"]]["Amount"].sum()
     remaining_budget = monthly_income - total_spent - invested
     netted_amount = df[df["is_reimbursement"]]["Amount"].abs().sum() / 2
 
@@ -163,24 +163,30 @@ with tab2:
                 category = st.selectbox(
                     "Assign Category",
                     [
-                        "Food - College Canteen",
-                        "Food - Royal Biryani",
-                        "Food - Akka Kadai",
-                        "Food - Delivery (Swiggy/Zomato)",
-                        "Food - Eating Out (Friends)",
-                        "Groceries / Snacks",
-                        "Transport - Petrol",
-                        "Transport - Rapid / Auto",
-                        "Friends Payments",
-                        "Sports & Activities",
-                        "Personal Care",
-                        "Shopping",
-                        "Gifts",
-                        "Investments (SIP)",
-                        "Other"
+                        "CANTEEN FOOD",
+                        "FOOD",
+                        "FOOD DELIVERY",
+                        "GROCERIES DELIVERY",
+                        "TRANSPORT",
+                        "CAB BOOKING",
+                        "FRIENDS PAYMENTS",
+                        "SPORTS & ACTIVITIES",
+                        "PERSONAL CARE",
+                        "ONLINE SHOPPING",
+                        "GIFTS",
+                        "INVESTMENTS",
+                        "ENTERTAINMENT",
+                        "EDUCATION",
+                        "RAILWAY BOOKING",
+                        "BUS BOOKING",
+                        "TRAVEL BOOKING",
+                        "FITNESS",
+                        "BEAUTY",
+                        "OTHER"
                     ],
                     key=f"select_{cluster[0]}"
                 )
+             
 
             with col3:
                 if st.button("Save", key=f"save_{cluster[0]}"):

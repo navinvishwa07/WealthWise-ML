@@ -1,20 +1,43 @@
 import os
 from groq import Groq
 from dotenv import load_dotenv
+import config
+
 
 def ask_groq(prompt, context):
     """Sends a prompt to Groq API with financial context as system prompt."""
     load_dotenv()
-    client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+    api_key = os.getenv("GROQ_API_KEY")
     
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[
-            {"role": "system", "content": context},
-            {"role": "user", "content": prompt}
-        ]
-    )
-    return response.choices[0].message.content
+    # Fallback if API key is missing
+    if not api_key:
+        return (
+            "AI Advisor is not configured.\n\n"
+            "Missing GROQ_API_KEY. Please set it in your .env file to enable AI insights.\n\n"
+            "Meanwhile, here’s a quick rule-based tip:\n"
+            "- Try to keep your spending below 80% of your income.\n"
+            "- Ensure you are contributing consistently toward your SIP target.\n"
+        )
+    
+    try:
+        client = Groq(api_key=api_key)
+        
+        response = client.chat.completions.create(
+            model=config.GROQ_MODEL,    
+            messages=[
+                {"role": "system", "content": context},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        
+        return response.choices[0].message.content
+     
+    except Exception as e:
+        return (
+            "AI Advisor is temporarily unavailable.\n\n"
+            f"Error: {str(e)}\n\n"
+            "Try again later or check your API configuration."
+        )
 
 def get_context(df, monthly_income, SIP):
     spending_df = df[~df["is_transfer"] & ~df["is_investment"] & ~df["is_reimbursement"]]
