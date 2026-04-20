@@ -127,7 +127,7 @@ with tab1:
             colA, colB = st.columns([3, 1])
             with colA:
                 st.write(category)
-                st.progress(percent / 100)
+                st.progress(max(0.0, min(percent / 100, 1.0)))
             with colB:
                 st.write(f"{percent:.1f}%")
 
@@ -177,6 +177,10 @@ with tab2:
                     st.session_state.df = df
                     del st.session_state["clusters"]
                     st.success(f"Saved {len(cluster)} merchants as {category}")
+
+                if st.button("Refresh Clusters"):
+                    del st.session_state["clusters"]
+                    st.rerun()
                     
 with tab3:
     st.subheader("Raw Transactions")
