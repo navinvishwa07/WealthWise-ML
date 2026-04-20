@@ -61,6 +61,7 @@ def cluster_merchants(df, threshold=config.FUZZY_THRESHOLD):
 
     return clusters
 
+
 def get_category(merchant, rules, threshold=config.FUZZY_THRESHOLD, model=None, vectorizer=None):
     """
     Determines category using:

@@ -1,20 +1,18 @@
 # --- Classification thresholds ---
 FUZZY_THRESHOLD = 80
 ML_CONFIDENCE_THRESHOLD = 0.75
-ML_MIN_TRAINING_SAMPLES = 50
+ML_MIN_TRAINING_SAMPLES = 10
+
 
 # --- Categories ---
 CATEGORIES = [
-    "food",
-    "transport",
-    "shopping",
-    "entertainment",
-    "utilities",
-    "health",
-    "education",
-    "travel",
-    "other"
+    "CANTEEN FOOD", "FOOD", "FOOD DELIVERY", "GROCERIES DELIVERY",
+    "TRANSPORT", "CAB BOOKING", "FRIENDS PAYMENTS", "SPORTS & ACTIVITIES",
+    "PERSONAL CARE", "ONLINE SHOPPING", "GIFTS", "INVESTMENTS",
+    "ENTERTAINMENT", "EDUCATION", "RAILWAY BOOKING", "BUS BOOKING",
+    "TRAVEL BOOKING", "FITNESS", "BEAUTY", "OTHER"
 ]
+
 
 # --- Rules configuration ---
 RULES_FILE = "user_rules.json"

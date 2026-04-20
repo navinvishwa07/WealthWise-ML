@@ -1,3 +1,5 @@
+from config import CATEGORIES
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -58,7 +60,7 @@ if "clusters" not in st.session_state:
     
     st.session_state.clusters = result["clusters"]
     
-    
+default_tab = 1 if st.query_params.get("tab") == "labeling" else 0
 tab1, tab2, tab3, tab4 = st.tabs(["Dashboard", "Labeling", "Raw Data", "AI Advisor"])
 
 with tab1:
@@ -84,19 +86,19 @@ with tab1:
     remaining_budget = monthly_income - total_spent - invested
     netted_amount = df[df["is_reimbursement"]]["Amount"].abs().sum() / 2
 
-    col1, col2, col3, col4, col5 = st.columns(5)
+    col1, col2, col3, col4, col5 = st.columns([2, 2, 2, 2, 2])
 
     with col1:
-        st.metric("Total Spent", f"₹ {total_spent:,.2f}")
+        st.metric("Spent", f"₹{total_spent:,.0f}")
     with col2:
-        st.metric("SIP (Investment)", f"₹ {invested:,.2f}")
+        st.metric("Invested", f"₹{invested:,.0f}")
     with col3:
-        st.metric("Remaining Budget", f"₹ {remaining_budget:,.2f}")
+        st.metric("Remaining Budget", f"₹ {remaining_budget:,.0f}")
     with col4:
-        st.metric("Reimbursements Netted", f"₹ {netted_amount:,.2f}")
+        st.metric("Reimbursements Netted", f"₹ {netted_amount:,.0f}")
     with col5:
         weekly_spend = weekly_safe_spend(monthly_income, total_spent, SIP)
-        st.metric("Weekly Safe Spend", f"₹ {weekly_spend:,.2f}")
+        st.metric("Weekly Safe Spend", f"₹ {weekly_spend:,.0f}")
 
     if SIP > 0:
         sip_progress = min(invested / SIP, 1.0)
@@ -161,41 +163,20 @@ with tab2:
 
             with col2:
                 category = st.selectbox(
-                    "Assign Category",
-                    [
-                        "CANTEEN FOOD",
-                        "FOOD",
-                        "FOOD DELIVERY",
-                        "GROCERIES DELIVERY",
-                        "TRANSPORT",
-                        "CAB BOOKING",
-                        "FRIENDS PAYMENTS",
-                        "SPORTS & ACTIVITIES",
-                        "PERSONAL CARE",
-                        "ONLINE SHOPPING",
-                        "GIFTS",
-                        "INVESTMENTS",
-                        "ENTERTAINMENT",
-                        "EDUCATION",
-                        "RAILWAY BOOKING",
-                        "BUS BOOKING",
-                        "TRAVEL BOOKING",
-                        "FITNESS",
-                        "BEAUTY",
-                        "OTHER"
-                    ],
-                    key=f"select_{cluster[0]}"
-                )
+                "Assign Category",
+                CATEGORIES,
+                key=f"select_{cluster[0]}"
+)
              
 
             with col3:
                 if st.button("Save", key=f"save_{cluster[0]}"):
-                    # Save all merchants in the cluster with the same category
                     for m in cluster:
                         save_rules(m, category)
+                        df.loc[df["Merchant"] == m, "Category"] = category
+                    st.session_state.df = df
+                    del st.session_state["clusters"]
                     st.success(f"Saved {len(cluster)} merchants as {category}")
-                    st.session_state.clusters = None
-                    st.rerun()
                     
 with tab3:
     st.subheader("Raw Transactions")
