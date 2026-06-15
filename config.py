@@ -1,0 +1,26 @@
+# --- Classification thresholds ---
+FUZZY_THRESHOLD = 80
+ML_CONFIDENCE_THRESHOLD = 0.75
+ML_MIN_TRAINING_SAMPLES = 10
+
+
+# --- Categories ---
+CATEGORIES = [
+    "CANTEEN FOOD", "FOOD", "FOOD DELIVERY", "GROCERIES DELIVERY",
+    "TRANSPORT", "CAB BOOKING", "FRIENDS PAYMENTS", "SPORTS & ACTIVITIES",
+    "PERSONAL CARE", "ONLINE SHOPPING", "GIFTS", "INVESTMENTS",
+    "ENTERTAINMENT", "EDUCATION", "RAILWAY BOOKING", "BUS BOOKING",
+    "TRAVEL BOOKING", "FITNESS", "BEAUTY", "OTHER"
+]
+
+
+# --- Rules configuration ---
+RULES_FILE = "user_rules.json"
+DEFAULT_RULES = "seed_rules.json"
+
+# --- Reimbursement logic ---
+REIMBURSEMENT_WINDOW_DAYS = 7
+REIMBURSEMENT_AMOUNT_TOLERANCE = 1
+
+# --- AI model configuration ---
+GROQ_MODEL = "llama-3.3-70b-versatile"
