@@ -8,8 +8,10 @@ import plotly.express as px
 
 from processor import generate_mock_data, process_data
 from classifier import apply_classification, save_rules, cluster_merchants
-from ai_advisor import get_context, ask_groq
+from embedding import embed_transactions
+from vector_store import store_embeddings
 from logic_engine import weekly_safe_spend, sinking_fund_calc
+from rag_advisor import ask_rag
 
 if "df" not in st.session_state:
     st.session_state.df = None
@@ -44,6 +46,8 @@ if st.session_state.df is None:
 
 df = st.session_state.df
 df = apply_classification(df)
+df = embed_transactions(df)
+store_embeddings(df)
 
 if "clusters" not in st.session_state:
     result = {}
@@ -194,8 +198,7 @@ with tab4:
     if st.button("Ask"):
         if user_question:
             with st.spinner("Thinking..."):
-                context = get_context(df, monthly_income, SIP)
-                response = ask_groq(user_question, context)
-            st.write(response)
+                response = ask_rag(user_question)
+                st.write(response)
         else:
             st.warning("Please enter a question.")
