@@ -193,6 +193,17 @@ with tab3:
 with tab4:
     st.subheader("AI Financial Advisor")
     
+    uploaded_doc = st.file_uploader(
+        "Upload a finance document (PDF)", 
+        type=["pdf"],
+        key="kb_upload"
+    )
+    
+    if uploaded_doc is not None:
+        from knowledge_base import load_document
+        chunks_stored = load_document(uploaded_doc, uploaded_doc.name)
+        st.success(f"Loaded {chunks_stored} chunks from {uploaded_doc.name}")
+    
     user_question = st.text_input("Ask me anything about your finances...")
     
     if st.button("Ask"):
