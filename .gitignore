@@ -4,10 +4,20 @@ tempCodeRunnerFile*
 # Python artifacts
 __pycache__/
 *.py[cod]
+.pytest_cache/
 
-# Data files (To keep your personal 5k income/SIP data private)
+# Local app/runtime artifacts
+chroma_db/
+
+# Local/generated reports
+docs/
+
+# Data files (keep personal bank/UPI exports private)
 *.csv
 *.xlsx
+WealthWise_TestCases/
+
+# Environment and local OS/editor files
 .env
 
 .DS_Store

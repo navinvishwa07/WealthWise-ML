@@ -12,8 +12,10 @@ Live demo: [wealthwise-ml.streamlit.app](https://wealthwise-ml.streamlit.app)
 - **Labeling workflow**: Clusters similar uncategorized merchants so one label can apply to multiple variants.
 - **Reimbursement detection**: Finds opposite-signed personal payment pairs within a configurable date and amount window.
 - **Dashboard metrics**: Shows spending, investments, remaining budget, reimbursements netted, weekly safe spend, category splits, and cumulative spend.
+- **Semantic transaction search**: Searches embedded transaction sentences by meaning, not only by exact merchant text.
 - **RAG advisor**: Embeds transactions with Sentence Transformers, stores them in ChromaDB, retrieves relevant context, and uses Groq through LangChain for grounded answers.
 - **PDF knowledge base**: Lets you upload finance PDFs that are chunked, embedded, and retrieved alongside transactions.
+- **Classifier evaluation**: Displays accuracy, a classification report, and a confusion matrix for the current merchant rules.
 
 ## Tech Stack
 
@@ -61,7 +63,9 @@ You can get a Groq API key from [console.groq.com](https://console.groq.com).
 3. Upload a `.csv` or `.xlsx` transaction export, or use the bundled mock data.
 4. Review the dashboard for spend, SIP progress, reimbursements, and category breakdowns.
 5. Use the **Labeling** tab to categorize uncategorized merchant clusters.
-6. Use the **AI Advisor** tab to ask finance questions, optionally after uploading a PDF knowledge source.
+6. Use the **Semantic Search** tab to find transactions by natural-language meaning.
+7. Use the **AI Advisor** tab to ask finance questions, optionally after uploading a PDF knowledge source.
+8. Use the **Evaluation** tab to inspect classifier accuracy, precision, recall, F1-score, and confusion matrix.
 
 ## Expected Data
 
@@ -83,8 +87,10 @@ processor.py         Header sniffing, cleaning, merchant extraction, reimburseme
 classifier.py        Rule loading, fuzzy matching, ML training, merchant classification
 embedding.py         Lazy SentenceTransformer loading and transaction embeddings
 vector_store.py      ChromaDB transaction collection and similarity search
+semantic_search.py   Natural-language semantic search over transaction embeddings
 knowledge_base.py    PDF extraction, chunking, embedding, and retrieval
 rag_advisor.py       Lazy Groq/LangChain RAG chain
+evaluator.py         Classifier metrics, report, and confusion matrix generation
 logic_engine.py      Budget and saving calculations
 config.py            Thresholds, categories, model names, collection names
 seeds_rules.json     Built-in merchant/category rules
@@ -97,7 +103,7 @@ test_rag_advisor.py  Local RAG dependency smoke check
 Run a syntax check:
 
 ```bash
-python -m py_compile main.py processor.py classifier.py embedding.py vector_store.py knowledge_base.py rag_advisor.py logic_engine.py config.py test_rag_advisor.py
+python -m py_compile main.py processor.py classifier.py embedding.py vector_store.py semantic_search.py knowledge_base.py rag_advisor.py evaluator.py logic_engine.py config.py test_rag_advisor.py
 ```
 
 Run the RAG smoke check:
