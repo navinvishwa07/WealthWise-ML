@@ -2,6 +2,7 @@ from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from vector_store import query_similar
+from knowledge_base import query_knowledge_base
 import os
 from dotenv import load_dotenv
 
@@ -14,19 +15,30 @@ llm = ChatGroq(
 
 prompt = PromptTemplate.from_template("""
 You are WealthWise, a personal finance advisor for Indian students.
-Use the following relevant transactions to answer the question.
+Use the following context to answer the question.
 
 Relevant Transactions:
-{context}
+{transactions}
+
+Finance Knowledge:
+{knowledge}
 
 Question: {question}
 
-Give specific, actionable advice based on the transactions above.
+Give specific, actionable advice based on the context above.
 """)
 
 chain = prompt | llm | StrOutputParser()
 
 def ask_rag(question):
-    results = query_similar(question, n_results=5)
-    context = "\n".join(results['documents'][0])
-    return chain.invoke({"context": context, "question": question})
+    transactions = query_similar(question, n_results=5)
+    knowledge = query_knowledge_base(question, n_results=3)
+    
+    transaction_context = "\n".join(transactions['documents'][0])
+    knowledge_context = "\n".join(knowledge['documents'][0])
+    
+    return chain.invoke({
+        "transactions": transaction_context,
+        "knowledge": knowledge_context,
+        "question": question
+    })
