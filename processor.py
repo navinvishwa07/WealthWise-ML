@@ -30,6 +30,7 @@ HEADER_SYNONYMS = {
     ]
 }
 
+
 def sniff_headers(df):
     """
     Maps bank-specific CSV headers to internal standard names.
@@ -59,6 +60,7 @@ def sniff_headers(df):
                 column_mapping[expected_header] = best_match
 
     return column_mapping
+
 
 def generate_mock_data(rows=15):
     """
@@ -133,14 +135,25 @@ def clean_amount(value):
     except ValueError:
         return 0.0
 
+
 def process_data(df):
     """Pipeline to clean and flag the dataframe."""
     column_mapping = sniff_headers(df)
+    missing_columns = sorted(set(HEADER_SYNONYMS) - set(column_mapping))
+
+    if missing_columns:
+        raise ValueError(
+            "Missing required column(s): "
+            f"{', '.join(missing_columns)}. Found columns: {', '.join(map(str, df.columns))}"
+        )
+
     df = df.rename(columns={v: k for k, v in column_mapping.items()})
-    df = df.dropna(subset=["Description", "Date", "Amount"])
+    df = df.copy()
     df["Amount"] = df["Amount"].apply(clean_amount)
     df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+    df = df.dropna(subset=["Description", "Date", "Amount"])
     df["Merchant"] = df["Description"].apply(clean_description)
+    df["Category"] = config.CATEGORY_UNCATEGORIZED
     df["is_transfer"] = df["Description"].str.contains(
         r'TRANSFER|SELF|SAVINGS', case=False, na=False
     )
@@ -150,16 +163,17 @@ def process_data(df):
     ends_with_pay = df["Description"].str.contains(r'-(?:UPI|PAY|GPAY|IMPS)$', regex=True, case=False)
     has_no_numbers = ~df["Description"].str.contains(r'\d+', regex=True)
     no_commerce = ~df["Description"].str.contains(  
-    r'(?:ORDER|STORE|SHOP|SUBSCRIPTION|RIDE|LUNCH|DELIVERY|PAYMENT|SERVICE|MART)',
-    regex=True,
-    case=False
+        r'(?:ORDER|STORE|SHOP|SUBSCRIPTION|RIDE|LUNCH|DELIVERY|PAYMENT|SERVICE|MART)',
+        regex=True,
+        case=False
     )
     
     df["is_person"] = ends_with_pay & has_no_numbers & no_commerce
-    df.loc[df["is_person"], "Category"] = "Friends Payments"
-    df.loc[df["is_transfer"], "Category"] = "Internal Transfer"
+    df.loc[df["is_person"], "Category"] = config.CATEGORY_FRIENDS_PAYMENTS
+    df.loc[df["is_transfer"], "Category"] = config.CATEGORY_INTERNAL_TRANSFER
     df = find_reimbursements(df)
     return df
+
 
 def find_reimbursements(df):
     df["is_reimbursement"] = False
@@ -169,26 +183,36 @@ def find_reimbursements(df):
     candidates = df[~df["is_investment"] & ~df["is_transfer"]].index.tolist()
     for i in candidates:
 
-        if i in matched: continue
+        if i in matched:
+            continue
 
         for j in candidates:
 
-            if j in matched or i == j: continue
+            if j in matched or i == j:
+                continue
 
             days_apart = abs((df.loc[j, "Date"] - df.loc[i, "Date"]).days)
-            amount_match = abs(abs(df.loc[i, "Amount"]) - abs(df.loc[j, "Amount"])) <= 1
+            amount_match = (
+                abs(abs(df.loc[i, "Amount"]) - abs(df.loc[j, "Amount"]))
+                <= config.REIMBURSEMENT_AMOUNT_TOLERANCE
+            )
             opposite_signs = (
                 (df.loc[i, "Amount"] > 0 and df.loc[j, "Amount"] < 0) or
                 (df.loc[i, "Amount"] < 0 and df.loc[j, "Amount"] > 0)
             )
             merchant_sim = fuzz.token_sort_ratio(
-
                 str(df.loc[i, "Description"]), str(df.loc[j, "Description"])
-
             )
             
             either_is_person = df.loc[i, "is_person"] or df.loc[j, "is_person"]
-            if days_apart <= config.REIMBURSEMENT_WINDOW_DAYS and amount_match and opposite_signs and merchant_sim >= config.FUZZY_THRESHOLD and either_is_person:
+            is_reimbursement_pair = (
+                days_apart <= config.REIMBURSEMENT_WINDOW_DAYS
+                and amount_match
+                and opposite_signs
+                and merchant_sim >= config.FUZZY_THRESHOLD
+                and either_is_person
+            )
+            if is_reimbursement_pair:
                 df.loc[i, "is_reimbursement"] = True
                 df.loc[j, "is_reimbursement"] = True
                 matched.add(i)

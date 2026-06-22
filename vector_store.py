@@ -1,12 +1,25 @@
 import chromadb
-from sentence_transformers import SentenceTransformer
 
-model = SentenceTransformer('all-MiniLM-L6-v2')
+import config
+from embedding import get_embedding_model
 
-client = chromadb.PersistentClient(path="./chroma_db")
-collection = client.get_or_create_collection(name="transactions")
+client = chromadb.PersistentClient(path=config.VECTOR_DB_PATH)
+collection = client.get_or_create_collection(name=config.TRANSACTION_COLLECTION)
+
+
+def _clear_collection():
+    existing = collection.get()
+    if existing["ids"]:
+        collection.delete(ids=existing["ids"])
+
 
 def store_embeddings(df):
+    """Persist the current transaction embeddings for RAG retrieval."""
+    if df.empty:
+        _clear_collection()
+        return 0
+
+    _clear_collection()
     collection.upsert(
         ids=[str(i) for i in df.index],
         embeddings=df['embedding'].tolist(),
@@ -21,11 +34,16 @@ def store_embeddings(df):
             for _, row in df.iterrows()
         ]
     )
+    return len(df)
+
 
 def query_similar(query_text, n_results=5):
-    query_vector = model.encode([query_text]).tolist()
+    if collection.count() == 0:
+        return {"documents": [[]]}
+
+    query_vector = get_embedding_model().encode([query_text]).tolist()
     results = collection.query(
         query_embeddings=query_vector,
-        n_results=n_results
+        n_results=min(n_results, collection.count())
     )
     return results

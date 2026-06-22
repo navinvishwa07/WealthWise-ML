@@ -1,83 +1,139 @@
-from config import CATEGORIES
-
-import streamlit as st
 import pandas as pd
-import numpy as np
-import threading
 import plotly.express as px
+import streamlit as st
 
-from processor import generate_mock_data, process_data
-from classifier import apply_classification, save_rules, cluster_merchants
+from classifier import apply_classification, cluster_merchants, save_rules
+from config import CATEGORIES, CATEGORY_UNCATEGORIZED
 from embedding import embed_transactions
+from logic_engine import weekly_safe_spend
+from processor import generate_mock_data, process_data
 from vector_store import store_embeddings
-from logic_engine import weekly_safe_spend, sinking_fund_calc
-from rag_advisor import ask_rag
 
-if "df" not in st.session_state:
-    st.session_state.df = None
 
-st.title("WealthWise - Finance Tracking app")
+APP_TITLE = "WealthWise"
+SUPPORTED_UPLOAD_TYPES = ["csv", "xlsx"]
 
-st.sidebar.title("Monthly Income in Rs")
-monthly_income = st.sidebar.number_input("Insert your monthly income")
-st.write("The current number is ", monthly_income)
 
-st.sidebar.title("Monthly SIP in Rs")
-SIP = st.sidebar.number_input("Insert your SIP amount")
-st.write("The current number is ", SIP)
+def initialize_session_state():
+    """Initialize Streamlit session state used across tabs."""
+    defaults = {
+        "df": None,
+        "clusters": None,
+        "embedded_df": None,
+        "embedded_fingerprint": None,
+        "uploaded_file_signature": None,
+    }
 
-monthly_spending_csv = st.file_uploader(
-    "Upload your monthly spending CSV",
-    type=["csv", "xlsx"]
-)
+    for key, value in defaults.items():
+        st.session_state.setdefault(key, value)
 
-if monthly_spending_csv is not None:
+
+def load_uploaded_transactions(uploaded_file):
+    """Read a CSV/XLSX upload and normalize it into WealthWise's schema."""
+    filename = uploaded_file.name.lower()
+
+    if filename.endswith(".xlsx"):
+        raw_df = pd.read_excel(uploaded_file)
+    else:
+        raw_df = pd.read_csv(uploaded_file, on_bad_lines="skip")
+
+    return process_data(raw_df)
+
+
+def dataframe_fingerprint(df):
+    """Create a stable fingerprint for transaction data in the current session."""
+    hashable_df = df.drop(columns=["embedding"], errors="ignore").astype(str)
+    return str(pd.util.hash_pandas_object(hashable_df, index=True).sum())
+
+
+def get_prepared_transactions(df):
+    """Classify, embed, and store transactions only when the data changes."""
+    classified_df = apply_classification(df.copy())
+    fingerprint = dataframe_fingerprint(classified_df)
+
+    if st.session_state.embedded_fingerprint == fingerprint:
+        return st.session_state.embedded_df.copy()
+
+    embedded_df = embed_transactions(classified_df)
+    store_embeddings(embedded_df)
+    st.session_state.embedded_df = embedded_df
+    st.session_state.embedded_fingerprint = fingerprint
+    return embedded_df.copy()
+
+
+def invalidate_prepared_transactions():
+    """Clear cached derived data after labels or source transactions change."""
+    st.session_state.clusters = None
+    st.session_state.embedded_df = None
+    st.session_state.embedded_fingerprint = None
+
+
+def render_sidebar():
+    st.sidebar.title("Monthly Plan")
+    monthly_income = st.sidebar.number_input(
+        "Monthly income",
+        min_value=0.0,
+        step=500.0,
+        format="%.0f",
+    )
+    monthly_sip = st.sidebar.number_input(
+        "Monthly SIP target",
+        min_value=0.0,
+        step=500.0,
+        format="%.0f",
+    )
+    return monthly_income, monthly_sip
+
+
+def render_upload_section():
+    uploaded_file = st.file_uploader(
+        "Upload your monthly spending file",
+        type=SUPPORTED_UPLOAD_TYPES,
+    )
+
+    if uploaded_file is None:
+        return
+
+    file_signature = (uploaded_file.name, uploaded_file.size)
+    if st.session_state.uploaded_file_signature == file_signature:
+        return
+
     try:
-        df = pd.read_csv(monthly_spending_csv, on_bad_lines='skip')
-        df = process_data(df)
-        st.session_state.df = df
-    except Exception as e:
-        st.error(f"Error processing file: {e}")
+        st.session_state.df = load_uploaded_transactions(uploaded_file)
+        st.session_state.uploaded_file_signature = file_signature
+        invalidate_prepared_transactions()
+        st.success("Transactions loaded successfully.")
+    except Exception as exc:
+        st.error(f"Could not process this file: {exc}")
 
-if st.session_state.df is None:
-    df = generate_mock_data()
-    df = process_data(df)
-    st.session_state.df = df
 
-df = st.session_state.df
-df = apply_classification(df)
-df = embed_transactions(df)
-store_embeddings(df)
-
-if "clusters" not in st.session_state:
-    result = {}
-    
-    def run_clustering():
-        """Runs cluster_merchants in a background thread and stores result."""
-        result["clusters"] = cluster_merchants(df)
-    
-    with st.spinner("Clustering merchants..."):
-        """Start thread and wait for it to finish before proceeding."""
-        thread = threading.Thread(target=run_clustering)
-        thread.start()
-        thread.join()
-    
-    st.session_state.clusters = result["clusters"]
-    
-default_tab = 1 if st.query_params.get("tab") == "labeling" else 0
-tab1, tab2, tab3, tab4 = st.tabs(["Dashboard", "Labeling", "Raw Data", "AI Advisor"])
-
-with tab1:
+def render_dashboard(df, monthly_income, monthly_sip):
     st.subheader("Overview")
 
-    spending_df = df[~df["is_transfer"] & ~df["is_investment"] & ~df["is_reimbursement"]]
+    spending_df = df[
+        ~df["is_transfer"]
+        & ~df["is_investment"]
+        & ~df["is_reimbursement"]
+    ]
     total_spent = spending_df["Amount"].sum()
-    daily_spend = spending_df.groupby("Date")["Amount"].sum().cumsum().reset_index()
-    daily_spend["Projected"] = np.linspace(0, monthly_income - SIP, len(daily_spend))
-    daily_spend.columns = ["Date", "Cumulative Spend", "Projected"]
-    
-    food_df = df[df["Category"].str.contains("Food", na=False)]
-    total_food = food_df["Amount"].sum()
+    invested = df[df["is_investment"]]["Amount"].sum()
+    remaining_budget = monthly_income - total_spent - invested
+    netted_amount = df[df["is_reimbursement"]]["Amount"].abs().sum() / 2
+    weekly_spend = weekly_safe_spend(monthly_income, total_spent, monthly_sip)
+
+    col1, col2, col3, col4, col5 = st.columns(5)
+    col1.metric("Spent", f"₹{total_spent:,.0f}")
+    col2.metric("Invested", f"₹{invested:,.0f}")
+    col3.metric("Remaining Budget", f"₹{remaining_budget:,.0f}")
+    col4.metric("Reimbursements Netted", f"₹{netted_amount:,.0f}")
+    col5.metric("Weekly Safe Spend", f"₹{weekly_spend:,.0f}")
+
+    if monthly_sip > 0:
+        st.progress(min(max(invested / monthly_sip, 0.0), 1.0))
+
+    if monthly_income > 0:
+        spending_ratio = (total_spent / monthly_income) * 100
+        st.write(f"You have spent {spending_ratio:.1f}% of your monthly income.")
 
     category_summary = (
         spending_df
@@ -85,131 +141,183 @@ with tab1:
         .sum()
         .sort_values(ascending=False)
     )
-    
-    invested = df[df["is_investment"]]["Amount"].sum()
-    remaining_budget = monthly_income - total_spent - invested
-    netted_amount = df[df["is_reimbursement"]]["Amount"].abs().sum() / 2
 
-    col1, col2, col3, col4, col5 = st.columns([2, 2, 2, 2, 2])
+    if category_summary.empty:
+        st.info("No spend transactions to chart yet.")
+    else:
+        pie_graph = px.pie(
+            values=category_summary.values,
+            names=category_summary.index,
+            hole=0.4,
+            title="Spending by Category",
+        )
+        st.plotly_chart(pie_graph, use_container_width=True)
 
-    with col1:
-        st.metric("Spent", f"₹{total_spent:,.0f}")
-    with col2:
-        st.metric("Invested", f"₹{invested:,.0f}")
-    with col3:
-        st.metric("Remaining Budget", f"₹ {remaining_budget:,.0f}")
-    with col4:
-        st.metric("Reimbursements Netted", f"₹ {netted_amount:,.0f}")
-    with col5:
-        weekly_spend = weekly_safe_spend(monthly_income, total_spent, SIP)
-        st.metric("Weekly Safe Spend", f"₹ {weekly_spend:,.0f}")
-
-    if SIP > 0:
-        sip_progress = min(invested / SIP, 1.0)
-        st.progress(sip_progress)
-
-    if monthly_income > 0:
-        spending_ratio = (total_spent / monthly_income) * 100
-        st.write(f"You have spent {spending_ratio:.1f}% of your monthly income.")
-
-    pie_graph = px.pie(
-    values=category_summary.values,
-    names=category_summary.index,
-    hole=0.4,
-    title="Spending by Category"
-    )
-    st.plotly_chart(pie_graph)
-    
-    line_graph = px.line(daily_spend, x = "Date", y = ["Cumulative Spend","Projected"], title="Cumulative Spending This month")
-    st.plotly_chart(line_graph)
+    if not spending_df.empty:
+        daily_spend = (
+            spending_df
+            .groupby("Date")["Amount"]
+            .sum()
+            .cumsum()
+            .reset_index()
+        )
+        daily_spend["Projected"] = pd.Series(
+            data=[
+                index * ((monthly_income - monthly_sip) / max(len(daily_spend) - 1, 1))
+                for index in range(len(daily_spend))
+            ],
+            index=daily_spend.index,
+        )
+        daily_spend.columns = ["Date", "Cumulative Spend", "Projected"]
+        line_graph = px.line(
+            daily_spend,
+            x="Date",
+            y=["Cumulative Spend", "Projected"],
+            title="Cumulative Spending This Month",
+        )
+        st.plotly_chart(line_graph, use_container_width=True)
 
     st.subheader("Category Spending Breakdown")
 
     if total_spent > 0:
         for category, amount in category_summary.items():
             percent = (amount / total_spent) * 100
-            colA, colB = st.columns([3, 1])
-            with colA:
-                st.write(category)
-                st.progress(max(0.0, min(percent / 100, 1.0)))
-            with colB:
-                st.write(f"{percent:.1f}%")
+            col_left, col_right = st.columns([3, 1])
+            col_left.write(category)
+            col_left.progress(max(0.0, min(percent / 100, 1.0)))
+            col_right.write(f"{percent:.1f}%")
 
-    if total_spent > 0:
-        food_ratio = (total_food / total_spent) * 100
+        food_total = df[
+            df["Category"].str.contains("FOOD", case=False, na=False)
+        ]["Amount"].sum()
+        food_ratio = (food_total / total_spent) * 100
         st.write(f"{food_ratio:.1f}% of your total spending is on food.")
-        
+
     canteen_count = df[df["Merchant"].isin(["DD", "DDSTORE"])].shape[0]
     if canteen_count > 5:
-        st.warning(f"⚠️ High canteen frequency — {canteen_count} visits this month!")
+        st.warning(f"⚠️ High canteen frequency — {canteen_count} visits this month.")
 
-with tab2:
+
+def render_labeling_tab(df):
     st.subheader("Uncategorized Merchants")
 
-    uncategorized_df = df[df["Category"] == "UNCATEGORIZED"]
+    uncategorized_df = df[df["Category"] == CATEGORY_UNCATEGORIZED]
     unique_merchants = set(uncategorized_df["Merchant"].unique())
-    clusters = st.session_state.clusters
 
-    if len(unique_merchants) == 0:
+    if not unique_merchants:
         st.success("All merchants are categorized.")
-    else:
-        for cluster in clusters:
-            # Only show clusters that have at least one uncategorized merchant
-            cluster_uncategorized = [m for m in cluster if m in unique_merchants]
-            if not cluster_uncategorized:
-                continue
+        return
 
-            col1, col2, col3 = st.columns([3, 2, 1])
+    if st.button("Refresh clusters"):
+        st.session_state.clusters = None
+        st.rerun()
 
-            with col1:
-                # Show all merchants in the cluster
-                st.write(", ".join(cluster))
+    if st.session_state.clusters is None:
+        with st.spinner("Clustering merchants..."):
+            st.session_state.clusters = cluster_merchants(df)
 
-            with col2:
-                category = st.selectbox(
-                "Assign Category",
-                CATEGORIES,
-                key=f"select_{cluster[0]}"
-)
-             
+    for cluster in st.session_state.clusters:
+        cluster_uncategorized = [merchant for merchant in cluster if merchant in unique_merchants]
 
-            with col3:
-                if st.button("Save", key=f"save_{cluster[0]}"):
-                    for m in cluster:
-                        save_rules(m, category)
-                        df.loc[df["Merchant"] == m, "Category"] = category
-                    st.session_state.df = df
-                    del st.session_state["clusters"]
-                    st.success(f"Saved {len(cluster)} merchants as {category}")
+        if not cluster_uncategorized:
+            continue
 
-                if st.button("Refresh Clusters"):
-                    del st.session_state["clusters"]
-                    st.rerun()
-                    
-with tab3:
+        cluster_key = "_".join(cluster_uncategorized)
+        col1, col2, col3 = st.columns([3, 2, 1])
+        col1.write(", ".join(cluster))
+
+        category = col2.selectbox(
+            "Assign category",
+            CATEGORIES,
+            key=f"select_{cluster_key}",
+        )
+
+        if col3.button("Save", key=f"save_{cluster_key}"):
+            for merchant in cluster:
+                save_rules(merchant, category)
+                df.loc[df["Merchant"] == merchant, "Category"] = category
+
+            st.session_state.df = df.drop(columns=["sentence", "embedding"], errors="ignore")
+            invalidate_prepared_transactions()
+            st.success(f"Saved {len(cluster)} merchant variants as {category}.")
+            st.rerun()
+
+
+def render_raw_data_tab(df):
     st.subheader("Raw Transactions")
-    st.dataframe(df)
-    
-with tab4:
+    display_df = df.drop(columns=["embedding"], errors="ignore")
+    st.dataframe(display_df, use_container_width=True)
+
+
+def render_ai_advisor_tab():
     st.subheader("AI Financial Advisor")
-    
-    uploaded_doc = st.file_uploader(
-        "Upload a finance document (PDF)", 
-        type=["pdf"],
-        key="kb_upload"
+    st.caption(
+        "Uses your stored transaction embeddings and optional PDF knowledge base "
+        "to answer finance questions through Groq."
     )
-    
+
+    uploaded_doc = st.file_uploader(
+        "Upload a finance document (PDF)",
+        type=["pdf"],
+        key="kb_upload",
+    )
+
     if uploaded_doc is not None:
         from knowledge_base import load_document
+
         chunks_stored = load_document(uploaded_doc, uploaded_doc.name)
-        st.success(f"Loaded {chunks_stored} chunks from {uploaded_doc.name}")
-    
+        st.success(f"Loaded {chunks_stored} chunks from {uploaded_doc.name}.")
+
     user_question = st.text_input("Ask me anything about your finances...")
-    
-    if st.button("Ask"):
-        if user_question:
-            with st.spinner("Thinking..."):
-                response = ask_rag(user_question)
-                st.write(response)
-        else:
-            st.warning("Please enter a question.")
+
+    if not st.button("Ask"):
+        return
+
+    if not user_question:
+        st.warning("Please enter a question.")
+        return
+
+    with st.spinner("Thinking..."):
+        try:
+            from rag_advisor import ask_rag
+
+            response = ask_rag(user_question)
+            st.write(response)
+        except RuntimeError as exc:
+            st.error(str(exc))
+        except Exception as exc:
+            st.error(f"AI advisor failed: {exc}")
+
+
+def main():
+    st.set_page_config(page_title=APP_TITLE, page_icon="💸", layout="wide")
+    initialize_session_state()
+
+    st.title("WealthWise - Finance Tracker")
+    monthly_income, monthly_sip = render_sidebar()
+    render_upload_section()
+
+    if st.session_state.df is None:
+        st.info("Using mock transactions. Upload a CSV or XLSX file to analyze your own data.")
+        st.session_state.df = process_data(generate_mock_data())
+
+    df = get_prepared_transactions(st.session_state.df)
+    tab_dashboard, tab_labeling, tab_raw, tab_ai = st.tabs(
+        ["Dashboard", "Labeling", "Raw Data", "AI Advisor"]
+    )
+
+    with tab_dashboard:
+        render_dashboard(df, monthly_income, monthly_sip)
+
+    with tab_labeling:
+        render_labeling_tab(df)
+
+    with tab_raw:
+        render_raw_data_tab(df)
+
+    with tab_ai:
+        render_ai_advisor_tab()
+
+
+if __name__ == "__main__":
+    main()
