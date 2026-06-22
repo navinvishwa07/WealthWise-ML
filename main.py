@@ -8,6 +8,7 @@ from embedding import embed_transactions
 from logic_engine import weekly_safe_spend
 from processor import generate_mock_data, process_data
 from vector_store import store_embeddings
+from evaluator import evaluate_classifier
 
 
 APP_TITLE = "WealthWise"
@@ -288,6 +289,37 @@ def render_ai_advisor_tab():
         except Exception as exc:
             st.error(f"AI advisor failed: {exc}")
 
+def render_evaluation_tab():
+    st.subheader("Classifier Evaluation")
+
+    report, matrix, labels, y_pred = evaluate_classifier()
+
+    if report is None:
+        st.warning("Not enough labeled merchants to evaluate the classifier.")
+        return
+
+    # Overall accuracy
+    st.metric("Accuracy", f"{report['accuracy'] * 100:.2f}%")
+
+    st.subheader("Classification Report")
+
+    report_df = (
+        pd.DataFrame(report)
+        .transpose()
+        .round(3)
+    )
+
+    st.dataframe(report_df, use_container_width=True)
+
+    st.subheader("Confusion Matrix")
+
+    matrix_df = pd.DataFrame(
+        matrix,
+        index=labels,
+        columns=labels,
+    )
+
+    st.dataframe(matrix_df, use_container_width=True)
 
 def main():
     st.set_page_config(page_title=APP_TITLE, page_icon="💸", layout="wide")
@@ -302,9 +334,15 @@ def main():
         st.session_state.df = process_data(generate_mock_data())
 
     df = get_prepared_transactions(st.session_state.df)
-    tab_dashboard, tab_labeling, tab_raw, tab_ai = st.tabs(
-        ["Dashboard", "Labeling", "Raw Data", "AI Advisor"]
-    )
+    tab_dashboard, tab_labeling, tab_raw, tab_ai, tab_evaluation = st.tabs(
+    [
+        "Dashboard",
+        "Labeling",
+        "Raw Data",
+        "AI Advisor",
+        "Evaluation",
+    ]
+)
 
     with tab_dashboard:
         render_dashboard(df, monthly_income, monthly_sip)
@@ -317,6 +355,9 @@ def main():
 
     with tab_ai:
         render_ai_advisor_tab()
+        
+    with tab_evaluation:
+        render_evaluation_tab()
 
 
 if __name__ == "__main__":
