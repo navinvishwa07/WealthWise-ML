@@ -9,7 +9,7 @@ from logic_engine import weekly_safe_spend
 from processor import generate_mock_data, process_data
 from vector_store import store_embeddings
 from evaluator import evaluate_classifier
-
+from semantic_search import semantic_search
 
 APP_TITLE = "WealthWise"
 SUPPORTED_UPLOAD_TYPES = ["csv", "xlsx"]
@@ -321,6 +321,22 @@ def render_evaluation_tab():
 
     st.dataframe(matrix_df, use_container_width=True)
 
+def render_semantic_search_tab():
+    st.subheader("Semantic Search")
+
+    query = st.text_input("Search your transactions")
+
+    if st.button("Search"):
+        results = semantic_search(query)
+
+        documents = results["documents"][0]
+        distances = results["distances"][0]
+
+        for doc, distance in zip(documents, distances):
+            st.write(doc)
+            st.write(f"Similarity: {1-distance:.2f}")
+            st.divider()
+            
 def main():
     st.set_page_config(page_title=APP_TITLE, page_icon="💸", layout="wide")
     initialize_session_state()
@@ -334,13 +350,13 @@ def main():
         st.session_state.df = process_data(generate_mock_data())
 
     df = get_prepared_transactions(st.session_state.df)
-    tab_dashboard, tab_labeling, tab_raw, tab_ai, tab_evaluation = st.tabs(
-    [
-        "Dashboard",
-        "Labeling",
-        "Raw Data",
-        "AI Advisor",
-        "Evaluation",
+    tab_dashboard, tab_labeling, tab_raw, tab_search, tab_ai, tab_evaluation = st.tabs([
+    "Dashboard",
+    "Labeling",
+    "Raw Data",
+    "Semantic Search",
+    "AI Advisor",
+    "Evaluation",
     ]
 )
 
@@ -358,6 +374,8 @@ def main():
         
     with tab_evaluation:
         render_evaluation_tab()
+    with tab_search:
+        render_semantic_search_tab()
 
 
 if __name__ == "__main__":
