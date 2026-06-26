@@ -1,6 +1,6 @@
-# WealthWise ML
+# Hybrid Transaction Classification & RAG Finance Assistant
 
-WealthWise ML is a Streamlit-based personal finance tracker for Indian students and retail investors. It ingests bank, UPI, CSV, or Excel transaction exports, cleans messy descriptions, categorizes merchants, nets reimbursements, tracks SIP progress, and offers a RAG-powered AI advisor over your transaction context.
+Hybrid Transaction Classification & RAG Finance Assistant ( WealthWise ML ) is a Streamlit-based personal finance tracker for Indian students and retail investors. It ingests bank, UPI, CSV, or Excel transaction exports, cleans messy descriptions, categorizes merchants, nets reimbursements, tracks SIP progress, and offers a RAG-powered AI advisor over your transaction context.
 
 Live demo: [wealthwise-ml.streamlit.app](https://wealthwise-ml.streamlit.app)
 
