@@ -34,8 +34,8 @@ Live demo: [wealthwise-ml.streamlit.app](https://wealthwise-ml.streamlit.app)
 ## Setup
 
 ```bash
-git clone https://github.com/navinvishwa07/WealthWise-ML.git
-cd WealthWise-ML
+git clone https://github.com/navinvishwa07/Hybrid-Transaction-Classification-RAG-Finance-Assistant.git
+cd Hybrid-Transaction-Classification-RAG-Finance-Assistant
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
