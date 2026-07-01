@@ -1,4 +1,3 @@
-markdown
 # Hybrid Transaction Classification & RAG Finance Assistant
 
 A personal finance tracker for Indian students and retail investors. Ingests bank and UPI transaction exports, classifies merchants using a hybrid rule-based and ML pipeline, nets out reimbursements, tracks SIP progress, and answers finance questions through a RAG pipeline grounded in the user's actual transaction history.
