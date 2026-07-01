@@ -1,124 +1,117 @@
+markdown
 # Hybrid Transaction Classification & RAG Finance Assistant
 
-Hybrid Transaction Classification & RAG Finance Assistant ( WealthWise ML ) is a Streamlit-based personal finance tracker for Indian students and retail investors. It ingests bank, UPI, CSV, or Excel transaction exports, cleans messy descriptions, categorizes merchants, nets reimbursements, tracks SIP progress, and offers a RAG-powered AI advisor over your transaction context.
+A personal finance tracker for Indian students and retail investors. Ingests bank and UPI transaction exports, classifies merchants using a hybrid rule-based and ML pipeline, nets out reimbursements, tracks SIP progress, and answers finance questions through a RAG pipeline grounded in the user's actual transaction history.
 
 Live demo: [wealthwise-ml.streamlit.app](https://wealthwise-ml.streamlit.app)
 
-## Features
+---
 
-- **Flexible ingestion**: Detects common bank/export headers such as `Date`, `Txn Date`, `Narration`, `Description`, `Amount`, `Debit`, and `Withdrawal Amt`.
-- **Merchant cleanup**: Normalizes noisy UPI descriptions like `UPI/DDSTORE/20260220/1` into clean merchant names such as `DDSTORE`.
-- **Hybrid classification**: Applies seed rules, user-saved rules, fuzzy matching, and a confidence-gated Random Forest model for unknown merchants.
-- **Labeling workflow**: Clusters similar uncategorized merchants so one label can apply to multiple variants.
-- **Reimbursement detection**: Finds opposite-signed personal payment pairs within a configurable date and amount window.
-- **Dashboard metrics**: Shows spending, investments, remaining budget, reimbursements netted, weekly safe spend, category splits, and cumulative spend.
-- **Semantic transaction search**: Searches embedded transaction sentences by meaning, not only by exact merchant text.
-- **RAG advisor**: Embeds transactions with Sentence Transformers, stores them in ChromaDB, retrieves relevant context, and uses Groq through LangChain for grounded answers.
-- **PDF knowledge base**: Lets you upload finance PDFs that are chunked, embedded, and retrieved alongside transactions.
-- **Classifier evaluation**: Displays accuracy, a classification report, and a confusion matrix for the current merchant rules.
+## What it does
 
-## Tech Stack
+**Agnostic CSV/XLSX ingestion** — A header sniffer maps varied bank export formats (HDFC, SBI, GPay, Groww) to a standard internal schema using exact match first, fuzzy match as fallback.
+
+**Merchant extraction** — Strips UPI noise from transaction strings (`UPI/DDSTORE/20260220/1` becomes `DDSTORE`) using regex pattern matching.
+
+**Reimbursement netting** — Detects paired outgoing/incoming amounts within a 7-day window, so money paid back by a friend doesn't inflate spending totals.
+
+**Hybrid classification** — Three-stage pipeline: exact match against saved rules, fuzzy match via RapidFuzz, then a confidence-gated Random Forest classifier (TF-IDF features) for unseen merchants. Low-confidence predictions fall back to `UNCATEGORIZED` rather than guessing wrong.
+
+**Labeling interface** — Groups similar uncategorized merchants into fuzzy clusters so a label applies once to every variant. Labels persist locally in `user_rules.json`.
+
+**SIP goal tracking** — Enter monthly income and SIP target. The dashboard shows spend, investment progress, remaining budget, and weekly safe-spend pacing.
+
+**Model evaluation** — Tests the classifier against saved rules and reports accuracy, per-category precision/recall/F1, and a confusion matrix, so classifier quality is measured rather than assumed.
+
+**Semantic transaction search** — A standalone search tab that finds transactions by meaning rather than exact keywords, using vector similarity over transaction embeddings.
+
+**RAG-powered AI advisor** — A chat interface backed by Groq (`llama-3.3-70b-versatile`). Transactions are embedded with sentence-transformers and stored in ChromaDB; at query time, the most relevant transactions — and any finance PDFs the user has uploaded — are retrieved and passed to the LLM as context via LangChain. Answers reference actual transaction data instead of generic advice.
+
+---
+
+## Tech stack
 
 | Layer | Tool |
 |---|---|
-| App UI | Streamlit |
-| Data processing | Pandas |
-| Charts | Plotly |
-| Classification | Scikit-learn, RapidFuzz |
+| Frontend | Streamlit |
+| Data processing | Pandas, NumPy, Regex |
+| Machine learning | Scikit-learn (Random Forest, TF-IDF), evaluated via precision/recall/F1/confusion matrix |
+| Fuzzy matching | RapidFuzz |
+| Visualizations | Plotly |
 | Embeddings | sentence-transformers (`all-MiniLM-L6-v2`) |
 | Vector store | ChromaDB |
 | RAG orchestration | LangChain |
-| LLM provider | Groq (`llama-3.3-70b-versatile`) |
+| LLM | Groq (`llama-3.3-70b-versatile`) |
 | PDF parsing | pypdf |
+
+---
 
 ## Setup
 
-```bash
+bash
 git clone https://github.com/navinvishwa07/Hybrid-Transaction-Classification-RAG-Finance-Assistant.git
 cd Hybrid-Transaction-Classification-RAG-Finance-Assistant
-python -m venv .venv
-source .venv/bin/activate
 pip install -r requirements.txt
+
+
+Add your Groq API key:
+
+bash
 cp .env.example .env
-```
+# Edit .env and add your key
 
-Add your Groq API key to `.env`:
 
-```bash
-GROQ_API_KEY=your_groq_api_key
-```
+Run:
 
-Run the app:
-
-```bash
+bash
 streamlit run main.py
-```
 
-You can get a Groq API key from [console.groq.com](https://console.groq.com).
+
+Get a free Groq API key at [console.groq.com](https://console.groq.com).
+
+---
 
 ## Usage
 
-1. Open the Streamlit app.
-2. Enter your monthly income and SIP target in the sidebar.
-3. Upload a `.csv` or `.xlsx` transaction export, or use the bundled mock data.
-4. Review the dashboard for spend, SIP progress, reimbursements, and category breakdowns.
-5. Use the **Labeling** tab to categorize uncategorized merchant clusters.
-6. Use the **Semantic Search** tab to find transactions by natural-language meaning.
-7. Use the **AI Advisor** tab to ask finance questions, optionally after uploading a PDF knowledge source.
-8. Use the **Evaluation** tab to inspect classifier accuracy, precision, recall, F1-score, and confusion matrix.
+1. Enter monthly income and SIP target in the sidebar.
+2. Upload a `.csv` or `.xlsx` transaction export, or use the bundled mock data.
+3. Review **Dashboard** for spend, SIP progress, reimbursements, and category breakdown.
+4. Use **Labeling** to categorize uncategorized merchant clusters — the classifier improves as more merchants are labeled.
+5. Check **Evaluation** to see classifier accuracy, precision/recall/F1, and the confusion matrix.
+6. Use **Semantic Search** to find transactions by meaning.
+7. Ask the **AI Advisor** finance questions, optionally after uploading a finance PDF for extra context.
 
-## Expected Data
+---
 
-WealthWise expects transaction data with recognizable date, description, and amount columns. The header sniffer maps common variants into this internal schema:
+## Project structure
 
-| Internal Field | Examples |
-|---|---|
-| `Date` | `Date`, `Txn Date`, `Transaction Date`, `Value Date`, `Posting Date` |
-| `Description` | `Description`, `Narration`, `Transaction Remarks`, `Remarks`, `Details`, `Particulars` |
-| `Amount` | `Amount`, `Withdrawal Amt`, `Debit`, `Dr Amount`, `Transaction Amount`, `Withdrawal Amt (INR)` |
+main.py               Streamlit UI: session state, dashboard, labeling, search, advisor, eval
+processor.py           CSV/XLSX ingestion, cleaning, merchant extraction, reimbursement detection
+classifier.py          Rule loading/saving, fuzzy matching, Random Forest training and inference
+embedding.py            Transaction-to-sentence templating and vector embedding (lazy-loaded model)
+vector_store.py           ChromaDB transaction collection: store and similarity search
+knowledge_base.py          PDF ingestion, chunking, embedding, and retrieval
+semantic_search.py          Standalone semantic search over transaction embeddings
+rag_advisor.py                LangChain chain wiring ChromaDB retrieval to Groq
+evaluator.py                   Classifier evaluation: precision, recall, F1, confusion matrix
+logic_engine.py                 Budget math: weekly safe spend, sinking fund calculation
+config.py                        Thresholds, categories, model names, collection names
+seeds_rules.json                  Built-in merchant-to-category defaults
+user_rules.json                    User-saved merchant labels (gitignored)
 
-Amounts are cleaned into numeric values. Opposite signs are used to identify reimbursement pairs, so exports that split debit and credit columns may need preprocessing before upload.
 
-## Project Structure
+---
 
-```text
-main.py              Streamlit UI, session state, dashboard, labeling, AI advisor
-processor.py         Header sniffing, cleaning, merchant extraction, reimbursement flags
-classifier.py        Rule loading, fuzzy matching, ML training, merchant classification
-embedding.py         Lazy SentenceTransformer loading and transaction embeddings
-vector_store.py      ChromaDB transaction collection and similarity search
-semantic_search.py   Natural-language semantic search over transaction embeddings
-knowledge_base.py    PDF extraction, chunking, embedding, and retrieval
-rag_advisor.py       Lazy Groq/LangChain RAG chain
-evaluator.py         Classifier metrics, report, and confusion matrix generation
-logic_engine.py      Budget and saving calculations
-config.py            Thresholds, categories, model names, collection names
-seeds_rules.json     Built-in merchant/category rules
-user_rules.json      Locally saved merchant labels
-test_rag_advisor.py  Local RAG dependency smoke check
-```
+## Privacy
 
-## Validation
+Transaction data is processed in-memory within the Streamlit session and never sent to an external server except as retrieved context in an explicit AI Advisor query. Locally persisted files:
 
-Run a syntax check:
+- `user_rules.json` — merchant labels created by the user (no amounts or dates)
+- `./chroma_db` — transaction and document embeddings used for semantic retrieval
 
-```bash
-python -m py_compile main.py processor.py classifier.py embedding.py vector_store.py semantic_search.py knowledge_base.py rag_advisor.py evaluator.py logic_engine.py config.py test_rag_advisor.py
-```
+If the AI Advisor tab is never used, no LLM request is made.
 
-Run the RAG smoke check:
-
-```bash
-python test_rag_advisor.py
-```
-
-## Privacy Notes
-
-- Uploaded transaction files are processed in the Streamlit session.
-- Merchant labeling rules are saved locally in `user_rules.json`.
-- Transaction sentences and embeddings are persisted locally in `./chroma_db` for semantic retrieval.
-- The AI Advisor sends your question plus retrieved transaction/PDF context to Groq when you click **Ask**.
-- If you do not use the AI Advisor, no LLM request is made.
+---
 
 ## License
 
